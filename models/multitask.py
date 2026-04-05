@@ -66,9 +66,9 @@ class MultiTaskPerceptionModel(nn.Module):
             num_classes=seg_classes,
         )
 
-        self._load_checkpoint(classifier_model, classifier_ckpt)
-        self._load_checkpoint(localizer_model, localizer_ckpt)
-        self._load_checkpoint(segmentation_model, unet_ckpt)
+        self._load_checkpoint(classifier_model, classifier_path)
+        self._load_checkpoint(localizer_model, localizer_path)
+        self._load_checkpoint(segmentation_model, unet_path)
 
         self.encoder = VGG11(in_channels=in_channels)
         self._initialize_shared_encoder(
