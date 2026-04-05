@@ -5,6 +5,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import gdown
 
 from .classification import VGG11Classifier
 from .localization import VGG11Localizer
@@ -37,9 +38,21 @@ class MultiTaskPerceptionModel(nn.Module):
         """
         super().__init__()
 
-        classifier_ckpt = self._resolve_checkpoint_path(classifier_path)
-        localizer_ckpt = self._resolve_checkpoint_path(localizer_path)
-        unet_ckpt = self._resolve_checkpoint_path(unet_path)
+        gdown.download(
+            id="1V3_uIyt7AGRH8QmTLXgoNV2_bVAX5O5d",
+            output=classifier_path,
+            quiet=False,
+        )
+        gdown.download(
+            id="1F925PrKZdOhzCM23WvYJqGghcEPP7IvZ",
+            output=localizer_path,
+            quiet=False,
+        )
+        gdown.download(
+            id="1UR0zrFBPbY1rHpKaMTTAtK6KDu3Au49C",
+            output=unet_path,
+            quiet=False,
+        )
 
         classifier_model = VGG11Classifier(
             num_classes=num_breeds,

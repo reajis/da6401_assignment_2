@@ -3,6 +3,5 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-checkpoints/
 data/test_datset_call.py
 test.py
