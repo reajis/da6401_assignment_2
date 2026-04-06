@@ -54,6 +54,7 @@ class VGG11Localizer(nn.Module):
             Bounding box coordinates [B, 4] in (x_center, y_center, width, height)
             format in image pixel space (not normalized values).
         """
+        """Forward pass for localization model."""
         _, _, h, w = x.shape
 
         x = self.encoder(x)
@@ -61,12 +62,12 @@ class VGG11Localizer(nn.Module):
         x = torch.flatten(x, 1)
 
         box = self.regressor(x)
-        box = torch.sigmoid(box)
 
-        x_center = box[:, 0] * w
-        y_center = box[:, 1] * h
-        width = box[:, 2] * w
-        height = box[:, 3] * h
+        # FIX: only center uses sigmoid, width/height use relu
+        x_center = torch.sigmoid(box[:, 0]) * w
+        y_center = torch.sigmoid(box[:, 1]) * h
+        width = torch.relu(box[:, 2])
+        height = torch.relu(box[:, 3])
 
         box = torch.stack([x_center, y_center, width, height], dim=1)
         return box

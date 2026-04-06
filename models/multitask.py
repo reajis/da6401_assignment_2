@@ -8,6 +8,7 @@ from .localization import VGG11Localizer
 from .segmentation import VGG11UNet
 
 
+
 class MultiTaskPerceptionModel(nn.Module):
     """Multi-task model that loads trained task-specific checkpoints."""
 

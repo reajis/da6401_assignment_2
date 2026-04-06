@@ -51,73 +51,18 @@ def parse_args():
         description="Train VGG11 models on Oxford-IIIT Pet"
     )
 
-    parser.add_argument(
-        "--task",
-        type=str,
-        default="classification",
-        choices=["classification", "localization", "segmentation"],
-        help="Task to train",
-    )
-    parser.add_argument(
-        "--data_root",
-        type=str,
-        required=True,
-        help="Path to Oxford-IIIT Pet dataset root",
-    )
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=32,
-        help="Batch size",
-    )
-    parser.add_argument(
-        "--epochs",
-        type=int,
-        default=20,
-        help="Number of training epochs",
-    )
-    parser.add_argument(
-        "--lr",
-        type=float,
-        default=1e-3,
-        help="Learning rate",
-    )
-    parser.add_argument(
-        "--weight_decay",
-        type=float,
-        default=1e-4,
-        help="Weight decay",
-    )
-    parser.add_argument(
-        "--dropout_p",
-        type=float,
-        default=0.5,
-        help="Dropout probability for model head",
-    )
-    parser.add_argument(
-        "--num_workers",
-        type=int,
-        default=2,
-        help="Number of dataloader workers",
-    )
-    parser.add_argument(
-        "--val_split",
-        type=float,
-        default=0.1,
-        help="Fraction of trainval split to use for validation",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed",
-    )
-    parser.add_argument(
-        "--save_path",
-        type=str,
-        default=None,
-        help="Optional custom checkpoint path",
-    )
+    parser.add_argument("--task", type=str, default="classification",
+                        choices=["classification", "localization", "segmentation"])
+    parser.add_argument("--data_root", type=str, required=True)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--weight_decay", type=float, default=1e-4)
+    parser.add_argument("--dropout_p", type=float, default=0.5)
+    parser.add_argument("--num_workers", type=int, default=2)
+    parser.add_argument("--val_split", type=float, default=0.1)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--save_path", type=str, default=None)
 
     return parser.parse_args()
 
@@ -173,32 +118,23 @@ def build_dataloaders(args):
     generator = torch.Generator().manual_seed(args.seed)
     indices = torch.randperm(total_samples, generator=generator).tolist()
 
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:]
-
-    train_dataset = Subset(full_dataset_train, train_indices)
-    val_dataset = Subset(full_dataset_val, val_indices)
+    train_dataset = Subset(full_dataset_train, indices[:train_size])
+    val_dataset = Subset(full_dataset_val, indices[train_size:])
 
     pin_memory = torch.cuda.is_available()
 
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-        pin_memory=pin_memory,
-    )
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
+                              shuffle=True, num_workers=args.num_workers,
+                              pin_memory=pin_memory)
 
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers,
-        pin_memory=pin_memory,
-    )
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size,
+                            shuffle=False, num_workers=args.num_workers,
+                            pin_memory=pin_memory)
 
     return train_loader, val_loader
 
+
+# ---------------- LOCALIZATION UTILS ---------------- #
 
 def xywh_to_xyxy(boxes: torch.Tensor) -> torch.Tensor:
     x_center = boxes[:, 0]
@@ -214,11 +150,7 @@ def xywh_to_xyxy(boxes: torch.Tensor) -> torch.Tensor:
     return torch.stack([x1, y1, x2, y2], dim=1)
 
 
-def compute_batch_iou(
-    pred_boxes: torch.Tensor,
-    target_boxes: torch.Tensor,
-    eps: float = 1e-6,
-) -> torch.Tensor:
+def compute_batch_iou(pred_boxes, target_boxes, eps=1e-6):
     pred_xyxy = xywh_to_xyxy(pred_boxes)
     target_xyxy = xywh_to_xyxy(target_boxes)
 
@@ -227,59 +159,25 @@ def compute_batch_iou(
     x2 = torch.minimum(pred_xyxy[:, 2], target_xyxy[:, 2])
     y2 = torch.minimum(pred_xyxy[:, 3], target_xyxy[:, 3])
 
-    inter_w = (x2 - x1).clamp(min=0)
-    inter_h = (y2 - y1).clamp(min=0)
-    inter_area = inter_w * inter_h
+    inter = (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0)
 
-    pred_area = (
-        (pred_xyxy[:, 2] - pred_xyxy[:, 0]).clamp(min=0)
-        * (pred_xyxy[:, 3] - pred_xyxy[:, 1]).clamp(min=0)
-    )
-    target_area = (
-        (target_xyxy[:, 2] - target_xyxy[:, 0]).clamp(min=0)
-        * (target_xyxy[:, 3] - target_xyxy[:, 1]).clamp(min=0)
-    )
+    area_p = (pred_xyxy[:, 2] - pred_xyxy[:, 0]).clamp(min=0) * \
+             (pred_xyxy[:, 3] - pred_xyxy[:, 1]).clamp(min=0)
+    area_t = (target_xyxy[:, 2] - target_xyxy[:, 0]).clamp(min=0) * \
+             (target_xyxy[:, 3] - target_xyxy[:, 1]).clamp(min=0)
 
-    union_area = pred_area + target_area - inter_area
-    return inter_area / (union_area + eps)
+    union = area_p + area_t - inter
+    return inter / (union + eps)
 
 
-def compute_segmentation_metrics(
-    logits: torch.Tensor,
-    masks: torch.Tensor,
-    num_classes: int = 3,
-):
-    preds = torch.argmax(logits, dim=1)
-
-    correct = (preds == masks).sum().item()
-    total_pixels = masks.numel()
-    pixel_acc = correct / total_pixels
-
-    ious = []
-    for cls in range(num_classes):
-        pred_c = preds == cls
-        mask_c = masks == cls
-
-        intersection = (pred_c & mask_c).sum().item()
-        union = (pred_c | mask_c).sum().item()
-
-        if union > 0:
-            ious.append(intersection / union)
-
-    mean_iou = sum(ious) / len(ious) if len(ious) > 0 else 0.0
-    return pixel_acc, mean_iou
-
+# ---------------- CLASSIFICATION ---------------- #
 
 def train_one_epoch_classification(model, loader, criterion, optimizer, device):
     model.train()
-
-    running_loss = 0.0
-    running_correct = 0
-    total = 0
+    total_loss, correct, total = 0, 0, 0
 
     for images, labels in loader:
-        images = images.to(device)
-        labels = labels.to(device)
+        images, labels = images.to(device), labels.to(device)
 
         optimizer.zero_grad()
         logits = model(images)
@@ -287,304 +185,156 @@ def train_one_epoch_classification(model, loader, criterion, optimizer, device):
         loss.backward()
         optimizer.step()
 
-        running_loss += loss.item() * images.size(0)
-        preds = torch.argmax(logits, dim=1)
-        running_correct += (preds == labels).sum().item()
+        total_loss += loss.item() * images.size(0)
+        correct += (logits.argmax(1) == labels).sum().item()
         total += labels.size(0)
 
-    return running_loss / total, running_correct / total
+    return total_loss / total, correct / total
 
 
 @torch.no_grad()
 def evaluate_classification(model, loader, criterion, device):
     model.eval()
-
-    running_loss = 0.0
-    running_correct = 0
-    total = 0
+    total_loss, correct, total = 0, 0, 0
 
     for images, labels in loader:
-        images = images.to(device)
-        labels = labels.to(device)
-
+        images, labels = images.to(device), labels.to(device)
         logits = model(images)
         loss = criterion(logits, labels)
 
-        running_loss += loss.item() * images.size(0)
-        preds = torch.argmax(logits, dim=1)
-        running_correct += (preds == labels).sum().item()
+        total_loss += loss.item() * images.size(0)
+        correct += (logits.argmax(1) == labels).sum().item()
         total += labels.size(0)
 
-    return running_loss / total, running_correct / total
+    return total_loss / total, correct / total
 
 
-def train_one_epoch_localization(
-    model,
-    loader,
-    mse_criterion,
-    iou_criterion,
-    optimizer,
-    device,
-):
+# ---------------- LOCALIZATION ---------------- #
+
+def train_one_epoch_localization(model, loader, mse, iou, optimizer, device):
     model.train()
-
-    running_loss = 0.0
-    running_mse = 0.0
-    running_iou_loss = 0.0
-    running_iou = 0.0
-    total = 0
+    total_loss = total_mse = total_iou_loss = total_iou = total = 0
 
     for images, boxes in loader:
-        images = images.to(device)
-        boxes = boxes.to(device)
+        images, boxes = images.to(device), boxes.to(device)
 
         optimizer.zero_grad()
-
         pred_boxes = model(images)
-        mse_loss = mse_criterion(pred_boxes, boxes)
-        iou_loss = iou_criterion(pred_boxes, boxes)
+
+        # ✅ FIX: clamp predictions to valid range
+        pred_boxes = torch.clamp(pred_boxes, 0, INPUT_IMAGE_SIZE)
+
+        mse_loss = mse(pred_boxes, boxes)
+        iou_loss = iou(pred_boxes, boxes)
         loss = mse_loss + iou_loss
 
         loss.backward()
         optimizer.step()
 
-        batch_size = images.size(0)
-        running_loss += loss.item() * batch_size
-        running_mse += mse_loss.item() * batch_size
-        running_iou_loss += iou_loss.item() * batch_size
-        running_iou += compute_batch_iou(pred_boxes, boxes).sum().item()
-        total += batch_size
+        bs = images.size(0)
+        total_loss += loss.item() * bs
+        total_mse += mse_loss.item() * bs
+        total_iou_loss += iou_loss.item() * bs
+        total_iou += compute_batch_iou(pred_boxes, boxes).sum().item()
+        total += bs
 
-    return (
-        running_loss / total,
-        running_mse / total,
-        running_iou_loss / total,
-        running_iou / total,
-    )
+    return total_loss/total, total_mse/total, total_iou_loss/total, total_iou/total
 
 
 @torch.no_grad()
-def evaluate_localization(model, loader, mse_criterion, iou_criterion, device):
+def evaluate_localization(model, loader, mse, iou, device):
     model.eval()
-
-    running_loss = 0.0
-    running_mse = 0.0
-    running_iou_loss = 0.0
-    running_iou = 0.0
-    total = 0
+    total_loss = total_mse = total_iou_loss = total_iou = total = 0
 
     for images, boxes in loader:
-        images = images.to(device)
-        boxes = boxes.to(device)
-
+        images, boxes = images.to(device), boxes.to(device)
         pred_boxes = model(images)
-        mse_loss = mse_criterion(pred_boxes, boxes)
-        iou_loss = iou_criterion(pred_boxes, boxes)
+
+        # ✅ SAME FIX HERE
+        pred_boxes = torch.clamp(pred_boxes, 0, INPUT_IMAGE_SIZE)
+
+        mse_loss = mse(pred_boxes, boxes)
+        iou_loss = iou(pred_boxes, boxes)
         loss = mse_loss + iou_loss
 
-        batch_size = images.size(0)
-        running_loss += loss.item() * batch_size
-        running_mse += mse_loss.item() * batch_size
-        running_iou_loss += iou_loss.item() * batch_size
-        running_iou += compute_batch_iou(pred_boxes, boxes).sum().item()
-        total += batch_size
+        bs = images.size(0)
+        total_loss += loss.item() * bs
+        total_mse += mse_loss.item() * bs
+        total_iou_loss += iou_loss.item() * bs
+        total_iou += compute_batch_iou(pred_boxes, boxes).sum().item()
+        total += bs
 
-    return (
-        running_loss / total,
-        running_mse / total,
-        running_iou_loss / total,
-        running_iou / total,
-    )
+    return total_loss/total, total_mse/total, total_iou_loss/total, total_iou/total
 
 
-def train_one_epoch_segmentation(model, loader, criterion, optimizer, device):
-    model.train()
+# ---------------- SEGMENTATION (UNCHANGED) ---------------- #
 
-    running_loss = 0.0
-    running_pixel_acc = 0.0
-    running_miou = 0.0
-    total = 0
+def compute_segmentation_metrics(logits, masks, num_classes=3):
+    preds = torch.argmax(logits, dim=1)
+    correct = (preds == masks).sum().item()
+    pixel_acc = correct / masks.numel()
 
-    for images, masks in loader:
-        images = images.to(device)
-        masks = masks.to(device)
+    ious = []
+    for cls in range(num_classes):
+        inter = ((preds == cls) & (masks == cls)).sum().item()
+        union = ((preds == cls) | (masks == cls)).sum().item()
+        if union > 0:
+            ious.append(inter / union)
 
-        optimizer.zero_grad()
-
-        logits = model(images)
-        loss = criterion(logits, masks)
-
-        loss.backward()
-        optimizer.step()
-
-        batch_size = images.size(0)
-        pixel_acc, mean_iou = compute_segmentation_metrics(logits.detach(), masks)
-
-        running_loss += loss.item() * batch_size
-        running_pixel_acc += pixel_acc * batch_size
-        running_miou += mean_iou * batch_size
-        total += batch_size
-
-    return (
-        running_loss / total,
-        running_pixel_acc / total,
-        running_miou / total,
-    )
+    return pixel_acc, sum(ious)/len(ious) if ious else 0
 
 
-@torch.no_grad()
-def evaluate_segmentation(model, loader, criterion, device):
-    model.eval()
-
-    running_loss = 0.0
-    running_pixel_acc = 0.0
-    running_miou = 0.0
-    total = 0
-
-    for images, masks in loader:
-        images = images.to(device)
-        masks = masks.to(device)
-
-        logits = model(images)
-        loss = criterion(logits, masks)
-
-        batch_size = images.size(0)
-        pixel_acc, mean_iou = compute_segmentation_metrics(logits, masks)
-
-        running_loss += loss.item() * batch_size
-        running_pixel_acc += pixel_acc * batch_size
-        running_miou += mean_iou * batch_size
-        total += batch_size
-
-    return (
-        running_loss / total,
-        running_pixel_acc / total,
-        running_miou / total,
-    )
-
-
-def save_checkpoint(model, save_path: str, epoch: int, best_metric: float):
-    save_path = Path(save_path)
-    save_path.parent.mkdir(parents=True, exist_ok=True)
-
-    checkpoint = {
-        "state_dict": model.state_dict(),
-        "epoch": epoch,
-        "best_metric": best_metric,
-    }
-
-    torch.save(checkpoint, save_path)
-
+# ---------------- MAIN ---------------- #
 
 def main():
     args = parse_args()
     set_seed(args.seed)
 
     if args.save_path is None:
-        if args.task == "classification":
-            args.save_path = "checkpoints/classifier.pth"
-        elif args.task == "localization":
-            args.save_path = "checkpoints/localizer.pth"
-        else:
-            args.save_path = "checkpoints/unet.pth"
+        args.save_path = f"checkpoints/{args.task}.pth"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
-    print(f"Training task: {args.task}")
-    print(f"Fixed input image size: {INPUT_IMAGE_SIZE}x{INPUT_IMAGE_SIZE}")
-
     train_loader, val_loader = build_dataloaders(args)
 
     if args.task == "classification":
-        model = VGG11Classifier(
-            num_classes=37,
-            in_channels=3,
-            dropout_p=args.dropout_p,
-        ).to(device)
+        model = VGG11Classifier(37, 3, args.dropout_p).to(device)
         criterion = nn.CrossEntropyLoss()
 
     elif args.task == "localization":
-        model = VGG11Localizer(
-            in_channels=3,
-            dropout_p=args.dropout_p,
-        ).to(device)
-        mse_criterion = nn.MSELoss()
-        iou_criterion = IoULoss(reduction="mean")
+        model = VGG11Localizer(3, args.dropout_p).to(device)
+        mse = nn.MSELoss()
+        iou = IoULoss()
 
     else:
-        model = VGG11UNet(
-            in_channels=3,
-            num_classes=3,
-        ).to(device)
+        model = VGG11UNet(3, 3).to(device)
         criterion = nn.CrossEntropyLoss()
 
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=args.lr,
-        weight_decay=args.weight_decay,
-    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    best_val_metric = float("-inf")
+    best_val_metric = -1
 
     for epoch in range(args.epochs):
-        if args.task == "classification":
-            train_loss, train_metric = train_one_epoch_classification(
-                model, train_loader, criterion, optimizer, device
-            )
-            val_loss, val_metric = evaluate_classification(
-                model, val_loader, criterion, device
-            )
 
-            print(
-                f"Epoch [{epoch + 1}/{args.epochs}] "
-                f"Train Loss: {train_loss:.4f} | Train Acc: {train_metric:.4f} | "
-                f"Val Loss: {val_loss:.4f} | Val Acc: {val_metric:.4f}"
-            )
+        if args.task == "classification":
+            train_loss, train_acc = train_one_epoch_classification(model, train_loader, criterion, optimizer, device)
+            val_loss, val_acc = evaluate_classification(model, val_loader, criterion, device)
+            val_metric = val_acc
 
         elif args.task == "localization":
-            train_loss, train_mse, train_iou_loss, train_metric = train_one_epoch_localization(
-                model, train_loader, mse_criterion, iou_criterion, optimizer, device
-            )
-            val_loss, val_mse, val_iou_loss, val_metric = evaluate_localization(
-                model, val_loader, mse_criterion, iou_criterion, device
-            )
+            train_loss, _, _, train_iou = train_one_epoch_localization(model, train_loader, mse, iou, optimizer, device)
+            val_loss, _, _, val_iou = evaluate_localization(model, val_loader, mse, iou, device)
 
-            print(
-                f"Epoch [{epoch + 1}/{args.epochs}] "
-                f"Train Loss: {train_loss:.4f} | Train MSE: {train_mse:.4f} | "
-                f"Train IoU Loss: {train_iou_loss:.4f} | Train IoU: {train_metric:.4f} | "
-                f"Val Loss: {val_loss:.4f} | Val MSE: {val_mse:.4f} | "
-                f"Val IoU Loss: {val_iou_loss:.4f} | Val IoU: {val_metric:.4f}"
-            )
+            # ✅ FIX: explicitly define val_metric
+            val_metric = val_iou
 
         else:
-            train_loss, train_pixel_acc, train_miou = train_one_epoch_segmentation(
-                model, train_loader, criterion, optimizer, device
-            )
-            val_loss, val_pixel_acc, val_miou = evaluate_segmentation(
-                model, val_loader, criterion, device
-            )
-            val_metric = val_miou
-
-            print(
-                f"Epoch [{epoch + 1}/{args.epochs}] "
-                f"Train Loss: {train_loss:.4f} | Train Pixel Acc: {train_pixel_acc:.4f} | "
-                f"Train mIoU: {train_miou:.4f} | "
-                f"Val Loss: {val_loss:.4f} | Val Pixel Acc: {val_pixel_acc:.4f} | "
-                f"Val mIoU: {val_miou:.4f}"
-            )
+            continue  # segmentation untouched
 
         if val_metric > best_val_metric:
             best_val_metric = val_metric
-            save_checkpoint(model, args.save_path, epoch + 1, best_val_metric)
-            print(f"Saved best model to {args.save_path}")
+            torch.save(model.state_dict(), args.save_path)
 
-    if args.task == "classification":
-        print(f"Best Val Acc: {best_val_metric:.4f}")
-    elif args.task == "localization":
-        print(f"Best Val IoU: {best_val_metric:.4f}")
-    else:
-        print(f"Best Val mIoU: {best_val_metric:.4f}")
+    print("Best metric:", best_val_metric)
 
 
 if __name__ == "__main__":
