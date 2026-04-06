@@ -25,10 +25,11 @@ class MultiTaskPerceptionModel(nn.Module):
 
         import gdown
         gdown.download(
-            id="1V3_uIyt7AGRH8QmTLXgoNV2_bVAX5O5d",
+            id="1a-WXozYRgxfq8d5ExAwJOeTE3p7kM2ns",
             output=classifier_path,
             quiet=False,
-        )
+        ) #https://drive.google.com/file/d/1a-WXozYRgxfq8d5ExAwJOeTE3p7kM2ns/view?usp=drive_link
+        #https://drive.google.com/file/d/1V3_uIyt7AGRH8QmTLXgoNV2_bVAX5O5d/view?usp=drive_link
         gdown.download(
             id="1F925PrKZdOhzCM23WvYJqGghcEPP7IvZ",
             output=localizer_path,
