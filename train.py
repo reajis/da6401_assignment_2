@@ -81,7 +81,7 @@ def get_transforms(task: str):
 
     if task == "classification":
         train_transform = ComposeTensor([
-            RandomHorizontalFlipTensor(p=0.5),
+            RandomHorizontalFlipTensor(p=0.7),
             normalize,
         ])
     else:
@@ -310,7 +310,14 @@ def main():
 
     if args.task == "classification":
         model = VGG11Classifier(37, 3, args.dropout_p).to(device)
-        criterion = nn.CrossEntropyLoss()
+        class_counts = torch.zeros(37)
+        for _, label in train_loader.dataset:
+            class_counts[label] += 1
+
+        weights = 1.0 / (class_counts + 1e-6)
+        weights = weights / weights.sum() * len(weights)
+
+        criterion = nn.CrossEntropyLoss(weight=weights.to(device))
 
     elif args.task == "localization":
         model = VGG11Localizer(3, args.dropout_p).to(device)
@@ -321,7 +328,7 @@ def main():
         model = VGG11UNet(3, 3).to(device)
         criterion = nn.CrossEntropyLoss()
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=args.weight_decay)
 
     best_val_metric = -1
 
