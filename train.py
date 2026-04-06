@@ -268,6 +268,71 @@ def evaluate_localization(model, loader, mse, iou, device):
 
 
 # ---------------- SEGMENTATION (UNCHANGED) ---------------- #
+def train_one_epoch_segmentation(model, loader, criterion, optimizer, device):
+    model.train()
+
+    running_loss = 0.0
+    running_pixel_acc = 0.0
+    running_miou = 0.0
+    total = 0
+
+    for images, masks in loader:
+        images = images.to(device)
+        masks = masks.to(device)
+
+        optimizer.zero_grad()
+
+        logits = model(images)
+        loss = criterion(logits, masks)
+
+        loss.backward()
+        optimizer.step()
+
+        batch_size = images.size(0)
+        pixel_acc, mean_iou = compute_segmentation_metrics(logits.detach(), masks)
+
+        running_loss += loss.item() * batch_size
+        running_pixel_acc += pixel_acc * batch_size
+        running_miou += mean_iou * batch_size
+        total += batch_size
+
+    return (
+        running_loss / total,
+        running_pixel_acc / total,
+        running_miou / total,
+    )
+
+
+@torch.no_grad()
+def evaluate_segmentation(model, loader, criterion, device):
+    model.eval()
+
+    running_loss = 0.0
+    running_pixel_acc = 0.0
+    running_miou = 0.0
+    total = 0
+
+    for images, masks in loader:
+        images = images.to(device)
+        masks = masks.to(device)
+
+        logits = model(images)
+        loss = criterion(logits, masks)
+
+        batch_size = images.size(0)
+        pixel_acc, mean_iou = compute_segmentation_metrics(logits, masks)
+
+        running_loss += loss.item() * batch_size
+        running_pixel_acc += pixel_acc * batch_size
+        running_miou += mean_iou * batch_size
+        total += batch_size
+
+    return (
+        running_loss / total,
+        running_pixel_acc / total,
+        running_miou / total,
+    )
+
 
 def compute_segmentation_metrics(logits, masks, num_classes=3):
     preds = torch.argmax(logits, dim=1)
@@ -306,7 +371,7 @@ def main():
     print(f" Val batches: {len(val_loader)}\n")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    train_loader, val_loader = build_dataloaders(args)
+    
 
     if args.task == "classification":
         model = VGG11Classifier(37, 3, args.dropout_p).to(device)
@@ -328,7 +393,7 @@ def main():
         model = VGG11UNet(3, 3).to(device)
         criterion = nn.CrossEntropyLoss()
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     best_val_metric = -1
 
@@ -347,7 +412,21 @@ def main():
             val_metric = val_iou
 
         else:
-            continue  # segmentation untouched
+            train_loss, train_pixel_acc, train_miou = train_one_epoch_segmentation(
+                model, train_loader, criterion, optimizer, device
+            )
+            val_loss, val_pixel_acc, val_miou = evaluate_segmentation(
+                model, val_loader, criterion, device
+            )
+            val_metric = val_miou
+
+            print(
+                f"Epoch [{epoch + 1}/{args.epochs}] "
+                f"Train Loss: {train_loss:.4f} | Train Pixel Acc: {train_pixel_acc:.4f} | "
+                f"Train mIoU: {train_miou:.4f} | "
+                f"Val Loss: {val_loss:.4f} | Val Pixel Acc: {val_pixel_acc:.4f} | "
+                f"Val mIoU: {val_miou:.4f}"
+            )
 
         if val_metric > best_val_metric:
             best_val_metric = val_metric

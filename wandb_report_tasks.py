@@ -1,22 +1,4 @@
-
-"""W&B experiment runner for Assignment-2 tasks 2.1 to 2.8.
-
-Assumptions:
-1. Uses project modules:
-   - data.pets_dataset.OxfordIIITPetDataset
-   - models.classification.VGG11Classifier
-   - models.localization.VGG11Localizer
-   - models.segmentation.VGG11UNet
-   - models.multitask.MultiTaskPerceptionModel
-2. For Task 2.1, the main assignment VGG11 uses BatchNorm. This script defines a
-   report-only "no BatchNorm" classifier for the required comparison.
-3. For Task 2.5, the localization model predicts only [xc, yc, w, h] and has no
-   explicit confidence head. This script logs a confidence proxy based on MC-dropout
-   predictive stability.
-4. For Task 2.7, you must pass three novel image paths via --novel_image_paths.
-5. Task 2.8's written reflection cannot be authored automatically; this script logs
-   the plots/tables needed for the reflection section.
-"""
+# W&B experiment runner for Assignment-2 tasks 2.1 to 2.8.
 
 import argparse
 import math
@@ -38,7 +20,7 @@ from data.pets_dataset import OxfordIIITPetDataset
 from losses.iou_loss import IoULoss
 from models.classification import VGG11Classifier
 from models.localization import VGG11Localizer
-from models.multitask import MultiTaskPerceptionModel
+from models.multitask import MultiTaskPerceptionModel  # kept, though not used in task 2.7 now
 from models.segmentation import VGG11UNet
 from models.layers import CustomDropout
 
@@ -218,13 +200,25 @@ def make_box_overlay(image_np: np.ndarray, gt_xyxy=None, pred_xyxy=None, title=N
     ax.imshow(image_np)
     if gt_xyxy is not None:
         x1, y1, x2, y2 = gt_xyxy
-        rect = patches.Rectangle((x1, y1), max(1.0, x2 - x1), max(1.0, y2 - y1),
-                                 linewidth=2, edgecolor="green", facecolor="none")
+        rect = patches.Rectangle(
+            (x1, y1),
+            max(1.0, x2 - x1),
+            max(1.0, y2 - y1),
+            linewidth=2,
+            edgecolor="green",
+            facecolor="none",
+        )
         ax.add_patch(rect)
     if pred_xyxy is not None:
         x1, y1, x2, y2 = pred_xyxy
-        rect = patches.Rectangle((x1, y1), max(1.0, x2 - x1), max(1.0, y2 - y1),
-                                 linewidth=2, edgecolor="red", facecolor="none")
+        rect = patches.Rectangle(
+            (x1, y1),
+            max(1.0, x2 - x1),
+            max(1.0, y2 - y1),
+            linewidth=2,
+            edgecolor="red",
+            facecolor="none",
+        )
         ax.add_patch(rect)
     if title is not None:
         ax.set_title(title)
@@ -259,8 +253,14 @@ def make_pipeline_showcase(image_np: np.ndarray, mask_np: np.ndarray, box_xyxy, 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     axes[0].imshow(image_np)
     x1, y1, x2, y2 = box_xyxy
-    rect = patches.Rectangle((x1, y1), max(1.0, x2 - x1), max(1.0, y2 - y1),
-                             linewidth=2, edgecolor="red", facecolor="none")
+    rect = patches.Rectangle(
+        (x1, y1),
+        max(1.0, x2 - x1),
+        max(1.0, y2 - y1),
+        linewidth=2,
+        edgecolor="red",
+        facecolor="none",
+    )
     axes[0].add_patch(rect)
     axes[0].set_title(title_text)
     axes[0].axis("off")
@@ -277,6 +277,22 @@ def make_pipeline_showcase(image_np: np.ndarray, mask_np: np.ndarray, box_xyxy, 
     return image
 
 
+def plot_overlay_curves(curves_dict, title, xlabel, ylabel):
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for label, values in curves_dict.items():
+        if values is None or len(values) == 0:
+            continue
+        epochs = list(range(1, len(values) + 1))
+        ax.plot(epochs, values, marker="o", label=label)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    return fig
+
+
 # -----------------------------
 # Dataset builders
 # -----------------------------
@@ -290,7 +306,11 @@ def build_train_val_loaders(
     max_train_samples=None,
     max_val_samples=None,
 ):
-    train_transform = get_classification_transforms(train=True) if task == "classification" else ComposeTensor([get_eval_transform()])
+    train_transform = (
+        get_classification_transforms(train=True)
+        if task == "classification"
+        else ComposeTensor([get_eval_transform()])
+    )
     eval_transform = ComposeTensor([get_eval_transform()])
 
     full_train = OxfordIIITPetDataset(
@@ -326,8 +346,20 @@ def build_train_val_loaders(
     val_ds = Subset(full_val, val_indices)
 
     pin_memory = torch.cuda.is_available()
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
     return train_loader, val_loader
 
 
@@ -342,7 +374,13 @@ def build_test_loader(data_root, task, batch_size, num_workers, max_samples=None
     if max_samples is not None:
         dataset = Subset(dataset, list(range(min(len(dataset), max_samples))))
     pin_memory = torch.cuda.is_available()
-    return DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
 
 
 # -----------------------------
@@ -712,9 +750,12 @@ def run_task_21(args):
             summary[f"task21_{model_name}_conv3_mean"] = float(act.mean().item())
             summary[f"task21_{model_name}_conv3_std"] = float(act.std().item())
 
-            # quick stable LR sweep
             for lr in lr_candidates:
-                test_model = VGG11Classifier(num_classes=NUM_CLASSES, dropout_p=args.dropout_p_task21).to(args.device) if model_name == "with_bn" else ReportClassifierNoBN(num_classes=NUM_CLASSES, dropout_p=args.dropout_p_task21).to(args.device)
+                test_model = (
+                    VGG11Classifier(num_classes=NUM_CLASSES, dropout_p=args.dropout_p_task21).to(args.device)
+                    if model_name == "with_bn"
+                    else ReportClassifierNoBN(num_classes=NUM_CLASSES, dropout_p=args.dropout_p_task21).to(args.device)
+                )
                 test_optimizer = torch.optim.Adam(test_model.parameters(), lr=lr, weight_decay=args.weight_decay)
                 stable = True
                 final_loss = None
@@ -727,13 +768,14 @@ def run_task_21(args):
                             break
                 except Exception:
                     stable = False
-                stable_lr_table.append([model_name, lr, int(stable), float(final_loss) if final_loss is not None else float("nan")])
+                stable_lr_table.append(
+                    [model_name, lr, int(stable), float(final_loss) if final_loss is not None else float("nan")]
+                )
 
             wandb.summary["best_val_accuracy"] = best_val_acc
         finally:
             finish_run(run)
 
-    # joint activation histogram
     act_bn = capture_conv_activation(models["with_bn"], activation_batch, conv_index=2)
     act_no_bn = capture_conv_activation(models["without_bn"], activation_batch, conv_index=2)
     run = init_run(
@@ -778,6 +820,8 @@ def run_task_21(args):
 # -----------------------------
 def run_task_22(args):
     summary = {}
+    histories = {}
+
     train_loader, val_loader = build_train_val_loaders(
         args.data_root,
         task="classification",
@@ -810,6 +854,12 @@ def run_task_22(args):
             optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
             best_val_acc = -1.0
             best_val_loss = None
+            history = {
+                "train_loss": [],
+                "val_loss": [],
+                "train_accuracy": [],
+                "val_accuracy": [],
+            }
 
             for epoch in range(args.task22_epochs):
                 train_loss, train_acc = train_one_epoch_classification(model, train_loader, criterion, optimizer, args.device)
@@ -825,6 +875,11 @@ def run_task_22(args):
                     }
                 )
 
+                history["train_loss"].append(train_loss)
+                history["val_loss"].append(val_loss)
+                history["train_accuracy"].append(train_acc)
+                history["val_accuracy"].append(val_acc)
+
                 if val_acc > best_val_acc:
                     best_val_acc = val_acc
                     best_val_loss = val_loss
@@ -832,10 +887,17 @@ def run_task_22(args):
             final_table_rows.append([p, best_val_acc, best_val_loss])
             summary[f"task22_dropout_{p}_best_val_acc"] = best_val_acc
             summary[f"task22_dropout_{p}_best_val_loss"] = best_val_loss
+            histories[f"dropout_{p}"] = history
         finally:
             finish_run(run)
 
-    run = init_run(args, name="task2_2_summary", job_type="task2_2", group="task2_2_internal_dynamics", config_extra={"subtask": "2.2"})
+    run = init_run(
+        args,
+        name="task2_2_summary",
+        job_type="task2_2",
+        group="task2_2_internal_dynamics",
+        config_extra={"subtask": "2.2"},
+    )
     try:
         table = wandb.Table(columns=["dropout_p", "best_val_accuracy", "best_val_loss"])
         for row in final_table_rows:
@@ -845,7 +907,7 @@ def run_task_22(args):
     finally:
         finish_run(run)
 
-    return summary
+    return {"summary": summary, "histories": histories}
 
 
 # -----------------------------
@@ -857,7 +919,6 @@ def set_encoder_trainability(unet_model: VGG11UNet, strategy: str):
             param.requires_grad = False
 
     elif strategy == "partial_fine_tuning":
-        # freeze early blocks, fine-tune later blocks
         for name, module in unet_model.encoder.named_children():
             freeze = name in {"stage1", "pool1", "stage2", "pool2", "stage3", "pool3"}
             for param in module.parameters():
@@ -882,6 +943,8 @@ def load_encoder_from_classifier(unet_model: VGG11UNet, classifier_ckpt_path: st
 
 def run_task_23(args):
     summary = {}
+    histories = {}
+
     train_loader, val_loader = build_train_val_loaders(
         args.data_root,
         task="segmentation",
@@ -927,7 +990,18 @@ def run_task_23(args):
 
             best_val_dice = -1.0
             best_val_pixel_acc = -1.0
-            best_epoch_time = None
+            epoch_times = []
+
+            history = {
+                "train_loss": [],
+                "val_loss": [],
+                "train_pixel_accuracy": [],
+                "val_pixel_accuracy": [],
+                "train_miou": [],
+                "val_miou": [],
+                "train_dice": [],
+                "val_dice": [],
+            }
 
             for epoch in range(args.task23_epochs):
                 start = time.time()
@@ -938,8 +1012,7 @@ def run_task_23(args):
                     model, val_loader, criterion, args.device
                 )
                 epoch_time = time.time() - start
-                if best_epoch_time is None or epoch_time < best_epoch_time:
-                    best_epoch_time = epoch_time
+                epoch_times.append(epoch_time)
 
                 wandb.log(
                     {
@@ -957,21 +1030,50 @@ def run_task_23(args):
                     }
                 )
 
+                history["train_loss"].append(train_loss)
+                history["val_loss"].append(val_loss)
+                history["train_pixel_accuracy"].append(train_pixel_acc)
+                history["val_pixel_accuracy"].append(val_pixel_acc)
+                history["train_miou"].append(train_miou)
+                history["val_miou"].append(val_miou)
+                history["train_dice"].append(train_dice)
+                history["val_dice"].append(val_dice)
+
                 if val_dice > best_val_dice:
                     best_val_dice = val_dice
                 if val_pixel_acc > best_val_pixel_acc:
                     best_val_pixel_acc = val_pixel_acc
 
-            final_rows.append([strategy, best_val_pixel_acc, best_val_dice, best_epoch_time])
+            avg_epoch_time = float(np.mean(epoch_times)) if epoch_times else 0.0
+            total_train_time = float(np.sum(epoch_times)) if epoch_times else 0.0
+
+            final_rows.append([strategy, best_val_pixel_acc, best_val_dice, avg_epoch_time, total_train_time])
             summary[f"task23_{strategy}_best_val_pixel_acc"] = best_val_pixel_acc
             summary[f"task23_{strategy}_best_val_dice"] = best_val_dice
-            summary[f"task23_{strategy}_best_epoch_time_seconds"] = best_epoch_time
+            summary[f"task23_{strategy}_avg_epoch_time_seconds"] = avg_epoch_time
+            summary[f"task23_{strategy}_total_train_time_seconds"] = total_train_time
+
+            histories[strategy] = history
         finally:
             finish_run(run)
 
-    run = init_run(args, name="task2_3_summary", job_type="task2_3", group="task2_3_transfer_learning", config_extra={"subtask": "2.3"})
+    run = init_run(
+        args,
+        name="task2_3_summary",
+        job_type="task2_3",
+        group="task2_3_transfer_learning",
+        config_extra={"subtask": "2.3"},
+    )
     try:
-        table = wandb.Table(columns=["strategy", "best_val_pixel_acc", "best_val_dice", "best_epoch_time_seconds"])
+        table = wandb.Table(
+            columns=[
+                "strategy",
+                "best_val_pixel_acc",
+                "best_val_dice",
+                "avg_epoch_time_seconds",
+                "total_train_time_seconds",
+            ]
+        )
         for row in final_rows:
             table.add_data(*row)
         wandb.log({"task2_3/summary_table": table})
@@ -979,7 +1081,7 @@ def run_task_23(args):
     finally:
         finish_run(run)
 
-    return summary
+    return {"summary": summary, "histories": histories}
 
 
 # -----------------------------
@@ -1020,7 +1122,12 @@ def run_task_24(args):
             image_np = image_np / 255.0
 
         image_tensor = torch.from_numpy(image_np).permute(2, 0, 1).float().unsqueeze(0)
-        image_tensor = F.interpolate(image_tensor, size=(INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE), mode="bilinear", align_corners=False)
+        image_tensor = F.interpolate(
+            image_tensor,
+            size=(INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE),
+            mode="bilinear",
+            align_corners=False,
+        )
         image_tensor = get_eval_transform()(image_tensor.squeeze(0)).unsqueeze(0).to(args.device)
 
         conv_layers = get_conv_layers(model)
@@ -1043,7 +1150,7 @@ def run_task_24(args):
 
         rows = []
         for key, fmap in [("first_conv", captured["first"]), ("last_conv", captured["last"])]:
-            fmap = fmap[0]  # [C,H,W]
+            fmap = fmap[0]
             channel_count = min(args.feature_map_channels_to_log, fmap.shape[0])
 
             for channel_idx in range(channel_count):
@@ -1061,6 +1168,7 @@ def run_task_24(args):
         for row in rows:
             table.add_data(*row)
         wandb.log({"task2_4/feature_maps_table": table})
+        wandb.log({"task2_4/input_image": wandb.Image(image_np)})
         wandb.summary.update(summary)
     finally:
         finish_run(run)
@@ -1073,22 +1181,33 @@ def run_task_24(args):
 def load_localization_model(checkpoint_path: str, device: torch.device, dropout_p: float = 0.2):
     model = VGG11Localizer(dropout_p=dropout_p).to(device)
     model.load_state_dict(load_checkpoint_state(checkpoint_path))
+    model.eval()
     return model
 
 
+def enable_dropout_only(model):
+    for module in model.modules():
+        if isinstance(module, CustomDropout):
+            module.train()
+
+
 def mc_dropout_confidence(model, image_tensor, passes=8):
-    # Assumption: model has no explicit objectness/confidence head.
-    # We use predictive stability under MC dropout as a 0-1 confidence proxy.
-    model.train()
+    model.eval()
+    enable_dropout_only(model)
+
     preds = []
     with torch.no_grad():
         for _ in range(passes):
             preds.append(model(image_tensor).detach().cpu())
-    preds = torch.stack(preds, dim=0)  # [T, B, 4]
+
+    preds = torch.stack(preds, dim=0)
     mean_box = preds.mean(dim=0)
     std_box = preds.std(dim=0)
 
-    norm = torch.tensor([INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE], dtype=std_box.dtype)
+    norm = torch.tensor(
+        [INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE],
+        dtype=std_box.dtype,
+    )
     uncertainty = (std_box / norm).mean(dim=1)
     confidence = torch.exp(-5.0 * uncertainty).clamp(0.0, 1.0)
     return mean_box, confidence
@@ -1108,16 +1227,16 @@ def run_task_25(args):
     )
     summary = {}
     try:
+        num_test_samples = args.max_test_samples if args.max_test_samples is not None else max(10, args.task25_num_images)
         loader = build_test_loader(
             args.data_root,
             task="localization",
             batch_size=1,
             num_workers=args.num_workers,
-            max_samples=max(10, args.task25_num_images),
+            max_samples=num_test_samples,
         )
         model = load_localization_model(args.localizer_ckpt, args.device, dropout_p=args.dropout_p_task21)
         mse_criterion = nn.MSELoss()
-        iou_criterion = IoULoss(reduction="mean")
 
         table = wandb.Table(columns=["index", "overlay", "confidence_proxy", "iou", "mse", "failure_case"])
 
@@ -1200,12 +1319,13 @@ def run_task_26(args):
     )
     summary = {}
     try:
+        num_test_samples = args.max_test_samples if args.max_test_samples is not None else max(5, args.task26_num_images)
         loader = build_test_loader(
             args.data_root,
             task="segmentation",
             batch_size=1,
             num_workers=args.num_workers,
-            max_samples=max(5, args.task26_num_images),
+            max_samples=num_test_samples,
         )
         model = load_segmentation_model(args.unet_ckpt, args.device)
 
@@ -1242,7 +1362,6 @@ def run_task_26(args):
 
         wandb.log({"task2_6/sample_triplets": table})
 
-        # scatter plot
         fig, ax = plt.subplots(figsize=(5, 4))
         ax.scatter(pixel_accs, dices)
         ax.set_xlabel("Pixel Accuracy")
@@ -1273,7 +1392,12 @@ def load_image_for_pipeline(image_path: str):
 
     orig_h, orig_w = image_np.shape[:2]
     tensor = torch.from_numpy(image_np).permute(2, 0, 1).float().unsqueeze(0)
-    tensor = F.interpolate(tensor, size=(INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE), mode="bilinear", align_corners=False)
+    tensor = F.interpolate(
+        tensor,
+        size=(INPUT_IMAGE_SIZE, INPUT_IMAGE_SIZE),
+        mode="bilinear",
+        align_corners=False,
+    )
     tensor = get_eval_transform()(tensor.squeeze(0)).unsqueeze(0)
     return image_np, tensor, orig_h, orig_w
 
@@ -1288,6 +1412,14 @@ def scale_box_from_input_to_original(box_xywh, orig_h, orig_w):
 def xywh_list_to_xyxy_list(box):
     xc, yc, w, h = box
     return [xc - w / 2.0, yc - h / 2.0, xc + w / 2.0, yc + h / 2.0]
+
+
+class ImageResizer:
+    @staticmethod
+    def resize_mask_nearest(mask_np, new_hw):
+        tensor = torch.from_numpy(mask_np).float().unsqueeze(0).unsqueeze(0)
+        tensor = F.interpolate(tensor, size=new_hw, mode="nearest")
+        return tensor.squeeze(0).squeeze(0).long().numpy()
 
 
 def run_task_27(args):
@@ -1309,12 +1441,9 @@ def run_task_27(args):
     )
     summary = {}
     try:
-        multitask = MultiTaskPerceptionModel(
-            classifier_path=args.classifier_ckpt,
-            localizer_path=args.localizer_ckpt,
-            unet_path=args.unet_ckpt,
-        ).to(args.device)
-        multitask.eval()
+        classifier = load_classification_model(args.classifier_ckpt, args.device, dropout_p=args.dropout_p_task21)
+        localizer = load_localization_model(args.localizer_ckpt, args.device, dropout_p=args.dropout_p_task21)
+        segmenter = load_segmentation_model(args.unet_ckpt, args.device)
 
         class_dataset = OxfordIIITPetDataset(
             root=args.data_root,
@@ -1332,12 +1461,11 @@ def run_task_27(args):
             tensor = tensor.to(args.device)
 
             with torch.no_grad():
-                outputs = multitask(tensor)
+                cls_logits = classifier(tensor)
+                loc_box = localizer(tensor)
+                seg_logits = segmenter(tensor)
 
-            cls_logits = outputs["classification"]
-            box_xywh = outputs["localization"][0].detach().cpu().tolist()
-            seg_logits = outputs["segmentation"]
-
+            box_xywh = loc_box[0].detach().cpu().tolist()
             top1_idx = int(torch.argmax(cls_logits, dim=1)[0].item())
             top1_label = class_names[top1_idx] if top1_idx < len(class_names) else f"class_{top1_idx}"
 
@@ -1369,18 +1497,10 @@ def run_task_27(args):
     return summary
 
 
-class ImageResizer:
-    @staticmethod
-    def resize_mask_nearest(mask_np, new_hw):
-        tensor = torch.from_numpy(mask_np).float().unsqueeze(0).unsqueeze(0)
-        tensor = F.interpolate(tensor, size=new_hw, mode="nearest")
-        return tensor.squeeze(0).squeeze(0).long().numpy()
-
-
 # -----------------------------
 # Task 2.8
 # -----------------------------
-def run_task_28(args, previous_summaries):
+def run_task_28(args, previous_results):
     run = init_run(
         args,
         name="task2_8_meta_analysis",
@@ -1390,43 +1510,107 @@ def run_task_28(args, previous_summaries):
     )
     summary = {}
     try:
-        table = wandb.Table(columns=["metric_name", "value"])
-        for summary_dict in previous_summaries:
-            for key, value in summary_dict.items():
+        scalar_table = wandb.Table(columns=["metric_name", "value"])
+
+        task22_histories = None
+        task23_histories = None
+
+        for result in previous_results:
+            if isinstance(result, dict) and "summary" in result:
+                result_summary = result["summary"]
+                result_histories = result.get("histories", {})
+            else:
+                result_summary = result
+                result_histories = {}
+
+            for key, value in result_summary.items():
                 if value is None:
                     continue
                 if isinstance(value, (int, float, np.floating)):
-                    table.add_data(key, float(value))
+                    scalar_table.add_data(key, float(value))
 
-        wandb.log({"task2_8/summary_table": table})
+            if result_histories:
+                if any("dropout_" in k for k in result_histories.keys()):
+                    task22_histories = result_histories
+                if any(
+                    k in result_histories
+                    for k in ["strict_feature_extractor", "partial_fine_tuning", "full_fine_tuning"]
+                ):
+                    task23_histories = result_histories
 
-        # bar plot for key comparable metrics
-        keys = []
-        vals = []
-        for summary_dict in previous_summaries:
-            for key, value in summary_dict.items():
-                if isinstance(value, (int, float, np.floating)):
-                    if any(token in key for token in ["best_val_acc", "best_val_dice", "mean_iou", "mean_dice", "mean_pixel_accuracy"]):
-                        keys.append(key)
-                        vals.append(float(value))
+        wandb.log({"task2_8/summary_table": scalar_table})
 
-        if keys:
-            fig, ax = plt.subplots(figsize=(max(8, len(keys) * 0.5), 4))
-            ax.bar(range(len(keys)), vals)
-            ax.set_xticks(range(len(keys)))
-            ax.set_xticklabels(keys, rotation=75, ha="right")
-            ax.set_title("Task 2.8: Cross-task metric summary")
-            ax.set_ylabel("Value")
-            plt.tight_layout()
-            wandb.log({"task2_8/cross_task_barplot": wandb.Image(fig)})
+        if task22_histories is not None:
+            fig = plot_overlay_curves(
+                {k: v["train_loss"] for k, v in task22_histories.items()},
+                title="Task 2.2: Train Loss across Dropout Settings",
+                xlabel="Epoch",
+                ylabel="Train Loss",
+            )
+            wandb.log({"task2_8/task22_train_loss_overlay": wandb.Image(fig)})
             plt.close(fig)
 
-        summary["task28_num_metrics_logged"] = len(keys)
-        summary["task28_note"] = 1.0  # placeholder numeric summary so it appears in W&B summary
+            fig = plot_overlay_curves(
+                {k: v["val_loss"] for k, v in task22_histories.items()},
+                title="Task 2.2: Validation Loss across Dropout Settings",
+                xlabel="Epoch",
+                ylabel="Validation Loss",
+            )
+            wandb.log({"task2_8/task22_val_loss_overlay": wandb.Image(fig)})
+            plt.close(fig)
+
+            fig = plot_overlay_curves(
+                {k: v["val_accuracy"] for k, v in task22_histories.items()},
+                title="Task 2.2: Validation Accuracy across Dropout Settings",
+                xlabel="Epoch",
+                ylabel="Validation Accuracy",
+            )
+            wandb.log({"task2_8/task22_val_accuracy_overlay": wandb.Image(fig)})
+            plt.close(fig)
+
+        if task23_histories is not None:
+            fig = plot_overlay_curves(
+                {k: v["train_loss"] for k, v in task23_histories.items()},
+                title="Task 2.3: Train Loss across Transfer Strategies",
+                xlabel="Epoch",
+                ylabel="Train Loss",
+            )
+            wandb.log({"task2_8/task23_train_loss_overlay": wandb.Image(fig)})
+            plt.close(fig)
+
+            fig = plot_overlay_curves(
+                {k: v["val_loss"] for k, v in task23_histories.items()},
+                title="Task 2.3: Validation Loss across Transfer Strategies",
+                xlabel="Epoch",
+                ylabel="Validation Loss",
+            )
+            wandb.log({"task2_8/task23_val_loss_overlay": wandb.Image(fig)})
+            plt.close(fig)
+
+            fig = plot_overlay_curves(
+                {k: v["val_pixel_accuracy"] for k, v in task23_histories.items()},
+                title="Task 2.3: Validation Pixel Accuracy across Transfer Strategies",
+                xlabel="Epoch",
+                ylabel="Pixel Accuracy",
+            )
+            wandb.log({"task2_8/task23_val_pixel_accuracy_overlay": wandb.Image(fig)})
+            plt.close(fig)
+
+            fig = plot_overlay_curves(
+                {k: v["val_dice"] for k, v in task23_histories.items()},
+                title="Task 2.3: Validation Dice across Transfer Strategies",
+                xlabel="Epoch",
+                ylabel="Dice Score",
+            )
+            wandb.log({"task2_8/task23_val_dice_overlay": wandb.Image(fig)})
+            plt.close(fig)
+
+        summary["task28_has_task22_histories"] = float(task22_histories is not None)
+        summary["task28_has_task23_histories"] = float(task23_histories is not None)
         wandb.summary.update(summary)
     finally:
         finish_run(run)
-    return summary
+    return {"summary": summary}
 
 
 # -----------------------------
@@ -1448,6 +1632,7 @@ def parse_args():
 
     parser.add_argument("--max_train_samples", type=int, default=None)
     parser.add_argument("--max_val_samples", type=int, default=None)
+    parser.add_argument("--max_test_samples", type=int, default=None)
 
     parser.add_argument("--classifier_ckpt", type=str, default="checkpoints/classifier.pth")
     parser.add_argument("--localizer_ckpt", type=str, default="checkpoints/localizer.pth")
@@ -1488,24 +1673,24 @@ def main():
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {args.device}")
 
-    all_summaries = []
+    all_results = []
 
     if args.which in {"all", "2.1"}:
-        all_summaries.append(run_task_21(args))
+        all_results.append(run_task_21(args))
     if args.which in {"all", "2.2"}:
-        all_summaries.append(run_task_22(args))
+        all_results.append(run_task_22(args))
     if args.which in {"all", "2.3"}:
-        all_summaries.append(run_task_23(args))
+        all_results.append(run_task_23(args))
     if args.which in {"all", "2.4"}:
-        all_summaries.append(run_task_24(args))
+        all_results.append(run_task_24(args))
     if args.which in {"all", "2.5"}:
-        all_summaries.append(run_task_25(args))
+        all_results.append(run_task_25(args))
     if args.which in {"all", "2.6"}:
-        all_summaries.append(run_task_26(args))
+        all_results.append(run_task_26(args))
     if args.which in {"all", "2.7"}:
-        all_summaries.append(run_task_27(args))
+        all_results.append(run_task_27(args))
     if args.which in {"all", "2.8"}:
-        all_summaries.append(run_task_28(args, all_summaries))
+        all_results.append(run_task_28(args, all_results))
 
     print("Finished requested W&B tasks.")
 
