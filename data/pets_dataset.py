@@ -188,7 +188,7 @@ class OxfordIIITPetDataset(Dataset):
             target = sample["label"]
             if self.target_transform is not None:
                 target = self.target_transform(target)
-            return image_tensor, target
+            return image_tensor,  torch.tensor(target, dtype=torch.long)
 
         if self.task == "localization":
             x1, y1, x2, y2 = self._load_bbox_xyxy(sample["bbox_path"])

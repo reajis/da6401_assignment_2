@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument(
         "--dropout_p",
         type=float,
-        default=0.5,
+        default=0.2,
         help="Dropout probability used during model construction",
     )
     parser.add_argument(

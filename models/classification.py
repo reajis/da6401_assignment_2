@@ -11,7 +11,7 @@ from .vgg11 import VGG11
 class VGG11Classifier(nn.Module):
     """Full classifier = VGG11Encoder + ClassificationHead."""
 
-    def __init__(self, num_classes: int = 37, in_channels: int = 3, dropout_p: float = 0.5):
+    def __init__(self, num_classes: int = 37, in_channels: int = 3, dropout_p: float = 0.2):
         """
         Initialize the VGG11Classifier model.
         Args:

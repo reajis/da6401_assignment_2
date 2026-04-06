@@ -58,7 +58,7 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight_decay", type=float, default=1e-4)
-    parser.add_argument("--dropout_p", type=float, default=0.5)
+    parser.add_argument("--dropout_p", type=float, default=0.2)
     parser.add_argument("--num_workers", type=int, default=2)
     parser.add_argument("--val_split", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
@@ -221,15 +221,6 @@ def train_one_epoch_localization(model, loader, mse, iou, optimizer, device):
         optimizer.zero_grad()
         pred_boxes = model(images)
 
-        # FIX: convert xyxy → cxcywh
-        x1, y1, x2, y2 = pred_boxes[:, 0], pred_boxes[:, 1], pred_boxes[:, 2], pred_boxes[:, 3]
-        cx = (x1 + x2) / 2
-        cy = (y1 + y2) / 2
-        w = (x2 - x1).clamp(min=0)
-        h = (y2 - y1).clamp(min=0)
-
-        pred_boxes = torch.stack([cx, cy, w, h], dim=1)
-
         # (optional but safe)
         pred_boxes = pred_boxes.clamp(min=0, max=INPUT_IMAGE_SIZE)
 
@@ -259,14 +250,6 @@ def evaluate_localization(model, loader, mse, iou, device):
         images, boxes = images.to(device), boxes.to(device)
         pred_boxes = model(images)
 
-        # ✅ SAME FIX here
-        x1, y1, x2, y2 = pred_boxes[:, 0], pred_boxes[:, 1], pred_boxes[:, 2], pred_boxes[:, 3]
-        cx = (x1 + x2) / 2
-        cy = (y1 + y2) / 2
-        w = (x2 - x1).clamp(min=0)
-        h = (y2 - y1).clamp(min=0)
-
-        pred_boxes = torch.stack([cx, cy, w, h], dim=1)
 
         pred_boxes = pred_boxes.clamp(min=0, max=INPUT_IMAGE_SIZE)
 
@@ -326,7 +309,7 @@ def main():
     train_loader, val_loader = build_dataloaders(args)
 
     if args.task == "classification":
-        model = VGG11Classifier(37, 3, 0.2).to(device)
+        model = VGG11Classifier(37, 3, args.dropout_p).to(device)
         criterion = nn.CrossEntropyLoss()
 
     elif args.task == "localization":

@@ -405,7 +405,7 @@ class ReportVGG11NoBN(nn.Module):
 
 
 class ReportClassifierNoBN(nn.Module):
-    def __init__(self, num_classes=NUM_CLASSES, dropout_p=0.5):
+    def __init__(self, num_classes=NUM_CLASSES, dropout_p=0.2):
         super().__init__()
         self.encoder = ReportVGG11NoBN()
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
@@ -1070,7 +1070,7 @@ def run_task_24(args):
 # -----------------------------
 # Task 2.5
 # -----------------------------
-def load_localization_model(checkpoint_path: str, device: torch.device, dropout_p: float = 0.5):
+def load_localization_model(checkpoint_path: str, device: torch.device, dropout_p: float = 0.2):
     model = VGG11Localizer(dropout_p=dropout_p).to(device)
     model.load_state_dict(load_checkpoint_state(checkpoint_path))
     return model
@@ -1456,7 +1456,7 @@ def parse_args():
     parser.add_argument("--task21_epochs", type=int, default=5)
     parser.add_argument("--task22_epochs", type=int, default=5)
     parser.add_argument("--task23_epochs", type=int, default=5)
-    parser.add_argument("--dropout_p_task21", type=float, default=0.5)
+    parser.add_argument("--dropout_p_task21", type=float, default=0.2)
     parser.add_argument("--task21_lr_candidates", type=str, default="0.0001,0.0003,0.001,0.003,0.01")
     parser.add_argument("--task21_stability_epochs", type=int, default=2)
     parser.add_argument("--task21_divergence_threshold", type=float, default=100.0)

@@ -11,7 +11,7 @@ from .vgg11 import VGG11
 class VGG11Localizer(nn.Module):
     """VGG11-based localizer."""
 
-    def __init__(self, in_channels: int = 3, dropout_p: float = 0.5):
+    def __init__(self, in_channels: int = 3, dropout_p: float = 0.2):
         """
         Initialize the VGG11Localizer model.
 
@@ -66,8 +66,8 @@ class VGG11Localizer(nn.Module):
         # FIX: only center uses sigmoid, width/height use relu
         x_center = torch.sigmoid(box[:, 0]) * w
         y_center = torch.sigmoid(box[:, 1]) * h
-        width = torch.relu(box[:, 2])
-        height = torch.relu(box[:, 3])
+        width = torch.sigmoid(box[:, 2]) * w
+        height = torch.sigmoid(box[:, 3]) * h
 
         box = torch.stack([x_center, y_center, width, height], dim=1)
         return box
