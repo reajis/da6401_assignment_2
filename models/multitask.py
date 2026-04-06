@@ -31,10 +31,11 @@ class MultiTaskPerceptionModel(nn.Module):
         ) #https://drive.google.com/file/d/1a-WXozYRgxfq8d5ExAwJOeTE3p7kM2ns/view?usp=drive_link
         #https://drive.google.com/file/d/1V3_uIyt7AGRH8QmTLXgoNV2_bVAX5O5d/view?usp=drive_link
         gdown.download(
-            id="1F925PrKZdOhzCM23WvYJqGghcEPP7IvZ",
+            id="1W-2xc4JQNEiF31bHWBLv7HkFgAg0TXmY",
             output=localizer_path,
             quiet=False,
-        )
+        )#https://drive.google.com/file/d/1W-2xc4JQNEiF31bHWBLv7HkFgAg0TXmY/view?usp=drive_link
+        #1F925PrKZdOhzCM23WvYJqGghcEPP7IvZ
         gdown.download(
             id="1UR0zrFBPbY1rHpKaMTTAtK6KDu3Au49C",
             output=unet_path,
