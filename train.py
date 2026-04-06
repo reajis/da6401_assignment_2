@@ -292,6 +292,18 @@ def main():
 
     if args.save_path is None:
         args.save_path = f"checkpoints/{args.task}.pth"
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    print(f"\nStarting training")
+    print(f" Task: {args.task}")
+    print(f" Device: {device}")
+    print(f" Epochs: {args.epochs}, Batch size: {args.batch_size}\n")
+
+    train_loader, val_loader = build_dataloaders(args)
+
+    print(f" Train batches: {len(train_loader)}")
+    print(f" Val batches: {len(val_loader)}\n")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader, val_loader = build_dataloaders(args)
@@ -324,7 +336,7 @@ def main():
             train_loss, _, _, train_iou = train_one_epoch_localization(model, train_loader, mse, iou, optimizer, device)
             val_loss, _, _, val_iou = evaluate_localization(model, val_loader, mse, iou, device)
 
-            # ✅ FIX: explicitly define val_metric
+            #  FIX: explicitly define val_metric
             val_metric = val_iou
 
         else:
