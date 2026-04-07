@@ -674,6 +674,49 @@ def finish_run(run):
 def is_finite_number(x):
     return math.isfinite(float(x))
 
+def fetch_wandb_group_histories(entity, project, group_name, metric_keys, max_runs=20):
+    api = wandb.Api()
+    runs = api.runs(f"{entity}/{project}", filters={"group": group_name})
+    histories = {}
+
+    for run in runs[:max_runs]:
+        run_name = run.name
+        history_rows = list(run.scan_history(keys=metric_keys))
+        if not history_rows:
+            continue
+
+        history_dict = {key: [] for key in metric_keys}
+        for row in history_rows:
+            has_any = False
+            for key in metric_keys:
+                value = row.get(key)
+                if value is not None:
+                    history_dict[key].append(value)
+                    has_any = True
+            if not has_any:
+                continue
+
+        if any(len(v) > 0 for v in history_dict.values()):
+            histories[run_name] = history_dict
+
+    return histories
+
+
+def simplify_task22_labels(histories):
+    simplified = {}
+    for run_name, hist in histories.items():
+        label = run_name.replace("task2_2_", "")
+        simplified[label] = hist
+    return simplified
+
+
+def simplify_task23_labels(histories):
+    simplified = {}
+    for run_name, hist in histories.items():
+        label = run_name.replace("task2_3_", "")
+        simplified[label] = hist
+    return simplified
+
 
 # -----------------------------
 # Task 2.1
@@ -1512,16 +1555,11 @@ def run_task_28(args, previous_results):
     try:
         scalar_table = wandb.Table(columns=["metric_name", "value"])
 
-        task22_histories = None
-        task23_histories = None
-
         for result in previous_results:
             if isinstance(result, dict) and "summary" in result:
                 result_summary = result["summary"]
-                result_histories = result.get("histories", {})
             else:
                 result_summary = result
-                result_histories = {}
 
             for key, value in result_summary.items():
                 if value is None:
@@ -1529,20 +1567,44 @@ def run_task_28(args, previous_results):
                 if isinstance(value, (int, float, np.floating)):
                     scalar_table.add_data(key, float(value))
 
-            if result_histories:
-                if any("dropout_" in k for k in result_histories.keys()):
-                    task22_histories = result_histories
-                if any(
-                    k in result_histories
-                    for k in ["strict_feature_extractor", "partial_fine_tuning", "full_fine_tuning"]
-                ):
-                    task23_histories = result_histories
-
         wandb.log({"task2_8/summary_table": scalar_table})
 
-        if task22_histories is not None:
+        if args.wandb_entity is None:
+            raise ValueError(
+                "For task 2.8 W&B history fetch, please pass --wandb_entity explicitly."
+            )
+
+        # Fetch task 2.2 runs from W&B project
+        task22_histories = fetch_wandb_group_histories(
+            entity=args.wandb_entity,
+            project=args.wandb_project,
+            group_name="task2_2_internal_dynamics",
+            metric_keys=["train/loss", "val/loss", "train/accuracy", "val/accuracy"],
+        )
+        task22_histories = simplify_task22_labels(task22_histories)
+
+        # Fetch task 2.3 runs from W&B project
+        task23_histories = fetch_wandb_group_histories(
+            entity=args.wandb_entity,
+            project=args.wandb_project,
+            group_name="task2_3_transfer_learning",
+            metric_keys=[
+                "train/loss",
+                "val/loss",
+                "train/pixel_accuracy",
+                "val/pixel_accuracy",
+                "train/miou",
+                "val/miou",
+                "train/dice",
+                "val/dice",
+            ],
+        )
+        task23_histories = simplify_task23_labels(task23_histories)
+
+        # Task 2.2 overlay plots
+        if task22_histories:
             fig = plot_overlay_curves(
-                {k: v["train_loss"] for k, v in task22_histories.items()},
+                {k: v["train/loss"] for k, v in task22_histories.items()},
                 title="Task 2.2: Train Loss across Dropout Settings",
                 xlabel="Epoch",
                 ylabel="Train Loss",
@@ -1551,7 +1613,7 @@ def run_task_28(args, previous_results):
             plt.close(fig)
 
             fig = plot_overlay_curves(
-                {k: v["val_loss"] for k, v in task22_histories.items()},
+                {k: v["val/loss"] for k, v in task22_histories.items()},
                 title="Task 2.2: Validation Loss across Dropout Settings",
                 xlabel="Epoch",
                 ylabel="Validation Loss",
@@ -1560,7 +1622,7 @@ def run_task_28(args, previous_results):
             plt.close(fig)
 
             fig = plot_overlay_curves(
-                {k: v["val_accuracy"] for k, v in task22_histories.items()},
+                {k: v["val/accuracy"] for k, v in task22_histories.items()},
                 title="Task 2.2: Validation Accuracy across Dropout Settings",
                 xlabel="Epoch",
                 ylabel="Validation Accuracy",
@@ -1568,9 +1630,10 @@ def run_task_28(args, previous_results):
             wandb.log({"task2_8/task22_val_accuracy_overlay": wandb.Image(fig)})
             plt.close(fig)
 
-        if task23_histories is not None:
+        # Task 2.3 overlay plots
+        if task23_histories:
             fig = plot_overlay_curves(
-                {k: v["train_loss"] for k, v in task23_histories.items()},
+                {k: v["train/loss"] for k, v in task23_histories.items()},
                 title="Task 2.3: Train Loss across Transfer Strategies",
                 xlabel="Epoch",
                 ylabel="Train Loss",
@@ -1579,7 +1642,7 @@ def run_task_28(args, previous_results):
             plt.close(fig)
 
             fig = plot_overlay_curves(
-                {k: v["val_loss"] for k, v in task23_histories.items()},
+                {k: v["val/loss"] for k, v in task23_histories.items()},
                 title="Task 2.3: Validation Loss across Transfer Strategies",
                 xlabel="Epoch",
                 ylabel="Validation Loss",
@@ -1588,7 +1651,7 @@ def run_task_28(args, previous_results):
             plt.close(fig)
 
             fig = plot_overlay_curves(
-                {k: v["val_pixel_accuracy"] for k, v in task23_histories.items()},
+                {k: v["val/pixel_accuracy"] for k, v in task23_histories.items()},
                 title="Task 2.3: Validation Pixel Accuracy across Transfer Strategies",
                 xlabel="Epoch",
                 ylabel="Pixel Accuracy",
@@ -1597,7 +1660,7 @@ def run_task_28(args, previous_results):
             plt.close(fig)
 
             fig = plot_overlay_curves(
-                {k: v["val_dice"] for k, v in task23_histories.items()},
+                {k: v["val/dice"] for k, v in task23_histories.items()},
                 title="Task 2.3: Validation Dice across Transfer Strategies",
                 xlabel="Epoch",
                 ylabel="Dice Score",
@@ -1605,11 +1668,12 @@ def run_task_28(args, previous_results):
             wandb.log({"task2_8/task23_val_dice_overlay": wandb.Image(fig)})
             plt.close(fig)
 
-        summary["task28_has_task22_histories"] = float(task22_histories is not None)
-        summary["task28_has_task23_histories"] = float(task23_histories is not None)
+        summary["task28_has_task22_histories"] = float(bool(task22_histories))
+        summary["task28_has_task23_histories"] = float(bool(task23_histories))
         wandb.summary.update(summary)
     finally:
         finish_run(run)
+
     return {"summary": summary}
 
 
