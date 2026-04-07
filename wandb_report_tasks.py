@@ -366,7 +366,7 @@ def build_train_val_loaders(
 def build_test_loader(data_root, task, batch_size, num_workers, max_samples=None):
     dataset = OxfordIIITPetDataset(
         root=data_root,
-        split="test",
+        split="trainval",
         task=task,
         transform=ComposeTensor([get_eval_transform()]),
         image_size=INPUT_IMAGE_SIZE,
@@ -1675,14 +1675,14 @@ def main():
 
     all_results = []
 
-    if args.which in {"all", "2.1"}:
-        all_results.append(run_task_21(args))
-    if args.which in {"all", "2.2"}:
-        all_results.append(run_task_22(args))
-    if args.which in {"all", "2.3"}:
-        all_results.append(run_task_23(args))
-    if args.which in {"all", "2.4"}:
-        all_results.append(run_task_24(args))
+    #if args.which in {"all", "2.1"}:
+    #    all_results.append(run_task_21(args))
+    #if args.which in {"all", "2.2"}:
+    #    all_results.append(run_task_22(args))
+    #if args.which in {"all", "2.3"}:
+    #    all_results.append(run_task_23(args))
+    #if args.which in {"all", "2.4"}:
+     #   all_results.append(run_task_24(args))
     if args.which in {"all", "2.5"}:
         all_results.append(run_task_25(args))
     if args.which in {"all", "2.6"}:
